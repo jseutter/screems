@@ -1,0 +1,11 @@
+#This document explains how to set up your system for running the
+#app.  Part 1 and 2 are useful to everyone.  Part 3 will rarely be used.
+
+#Setup:
+#
+
+sudo apt-get install python3-dev python-virtualenv
+
+virtualenv -p /usr/bin/python3.4 --distribute env
+source ./env/bin/activate
+pip install -r requirements.txt
