@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 import time
@@ -57,7 +58,7 @@ Options:
 
 """ % (SCRIPT_NAME)
 
-# Parse cmd line options
+
 def parse_cmd_line(argv):
     """
     Parse command line arguments
@@ -65,15 +66,31 @@ def parse_cmd_line(argv):
     argv: Pass in cmd line arguments
     """
 
-    options = {}
-    options["debug"] = False
-    options["verbose"] = True
-    options["port"] = 8888
-    options["safe_dirs"] = ["/tmp"]
-    options["safe_files"] = []
-    options["shutdown"] = False
-    options["daemon"] = False
-    return options
+#    options = {}
+#    options["debug"] = False
+#    options["verbose"] = True
+#    options["port"] = 8888
+#    options["safe_dirs"] = ["/tmp"]
+#    options["safe_files"] = []
+#    options["shutdown"] = False
+#    options["daemon"] = False
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--debug", help="Enable debugging", action="store_true")
+    parser.add_argument("-v", "--verbose", help="Enable verbose logging", action="store_true")
+    parser.add_argument("-p", "--port", help="Server port to run on", default=8888)
+    parser.add_argument("--dirs", help="Directories to serve from the web interface")
+    parser.add_argument("--files", help="Specific files to serve from the web interface")
+    parser.add_argument("-k", "--kill", help="Kill previous instance running in the background", action="store_true")
+    parser.add_argument("--background", help="Run in background", action="store_true")
+
+    args = parser.parse_args()
+    if args.dirs == None:
+        args.dirs = []
+    else:
+        args.dirs = args.dirs.split(',')
+    # TODO add support for individual files
+    return args
 
 
 def set_logging(cmd_options):
@@ -84,10 +101,10 @@ def set_logging(cmd_options):
     log_level = logging.INFO
     log_level_console = logging.WARNING
 
-    if cmd_options['verbose'] == True:
+    if cmd_options.verbose:
         log_level_console = logging.INFO
 
-    if cmd_options['debug'] == True:
+    if cmd_options.debug:
         log_level_console = logging.DEBUG
         log_level = logging.DEBUG
 
@@ -99,7 +116,7 @@ def set_logging(cmd_options):
     console_log.setFormatter(formatter)
 
 #    syslog_hndlr = SysLogHandler(
-#        address=cmd_options['syslog'],
+#        address=cmd_options.syslog,
 #        facility=SysLogHandler.LOG_USER
 #    )
 
@@ -132,6 +149,8 @@ class JavascriptHandler(tornado.web.RequestHandler):
         self.write("Hello world")
 
     def get(self):
+        # TODO: add support for changing port
+        # TODO: add support for setting fqdn
         self.write("""
 <html>
 <body>
@@ -159,17 +178,18 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         rest = os.path.normpath(rest)
         rest = rest.lstrip('/')
         rest = rest.lstrip('../')
-        path = os.path.join(safe_dir, rest)
-        return path
+        return os.path.join(safe_dir, rest)
 
     def on_message(self, message):
+        # Find and serve the path requested in the message.
         found = False
-        for safe_dir in OPTIONS['safe_dirs']:
+        for safe_dir in OPTIONS.dirs:
             path = self._cleanse_path(safe_dir, message)
             if os.path.exists(path) and os.path.isfile(path):
                 found = True
-                contents = open('/tmp/' + message, 'r').read()
+                contents = open(path, 'r').read()
                 self.write_message(contents)
+                print("WSSEND %s (%s)" % (message, path))
                 break
         # TODO: Handle file not found condition.
         if not found:
@@ -200,7 +220,7 @@ def main():
 
     pid_file = "%s/.%s.pid" % (expanduser("~"), SCRIPT_NAME)
 
-    if options["shutdown"]:
+    if options.kill:
         send_shutdown(pid_file)
         sys.exit(0)
 
@@ -209,8 +229,7 @@ def main():
     signal.signal(signal.SIGTERM, _shutdown)
 
     log.debug("Using settings:")
-    for key, value in iter(sorted(options.items())):
-        log.debug("%s : %s" % (key, value))
+    log.debug(str(options))
     
     application = tornado.web.Application([
             (r'/js', JavascriptHandler),
@@ -218,25 +237,25 @@ def main():
             ])
 
 
-    if options["daemon"]:
+    if options.background:
         log.info("Starting in background ...")
         my_daemon = MyDaemon(pid_file, options)
     else:
         log.info("Starting ...")
 
     if my_daemon:
-        options["tornado_application"] = application
+        options.tornado_application = application
         my_daemon.start()
     else:
-        application.listen(options["port"])
+        application.listen(options.port)
         tornado.ioloop.IOLoop.instance().start()
 
 
 class MyDaemon(daemon.daemon):
     def run(self):
-        application = self.options["tornado_application"]
+        application = self.options.tornado_application
         log.debug("Background Daemon: Listening on socket")
-        application.listen(self.options["port"])
+        application.listen(self.options.port)
         log.debug("Background Daemon: Starting IOLOOP")
         tornado.ioloop.IOLoop.instance().start()
 
