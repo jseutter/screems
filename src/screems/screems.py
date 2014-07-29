@@ -11,6 +11,8 @@ from logging.handlers import *
 
 import tornado.ioloop
 import tornado.web
+import tornado.websocket
+
 
 SCRIPT_NAME = os.path.basename(__file__)
 
@@ -26,6 +28,8 @@ EXTRA_LIB = "%s/libs" % (SCRIPT_PATH)
 
 
 LOG_NAME = "%s" % (SCRIPT_NAME)
+OPTIONS = {}
+
 log = None
 
 sys.path.append(EXTRA_LIB)
@@ -61,14 +65,15 @@ def parse_cmd_line(argv):
     argv: Pass in cmd line arguments
     """
 
-    cmd_line_option_list = {}
-    cmd_line_option_list["debug"] = False
-    cmd_line_option_list["verbose"] = True
-    cmd_line_option_list["port"] = 8888
-    cmd_line_option_list["safe_dirs"] = []
-    cmd_line_option_list["safe_files"] = []
-    cmd_line_option_list["shutdown"] = False
-    cmd_line_option_list["daemon"] = False
+    options = {}
+    options["debug"] = False
+    options["verbose"] = True
+    options["port"] = 8888
+    options["safe_dirs"] = ["/tmp"]
+    options["safe_files"] = []
+    options["shutdown"] = False
+    options["daemon"] = False
+    return options
 
 
 def set_logging(cmd_options):
@@ -93,21 +98,21 @@ def set_logging(cmd_options):
     console_log.setLevel(log_level_console)
     console_log.setFormatter(formatter)
 
-    syslog_hndlr = SysLogHandler(
-        address=cmd_options['syslog'],
-        facility=SysLogHandler.LOG_USER
-    )
+#    syslog_hndlr = SysLogHandler(
+#        address=cmd_options['syslog'],
+#        facility=SysLogHandler.LOG_USER
+#    )
 
-    syslog_hndlr.setFormatter(sys_formatter)
+#    syslog_hndlr.setFormatter(sys_formatter)
 
     log.setLevel(log_level)
     log.addHandler(console_log)
-    log.addHandler(syslog_hndlr)
+#    log.addHandler(syslog_hndlr)
 
     access_log = logging.getLogger("tornado.access")
     access_log.setLevel(log_level)
     access_log.addHandler(console_log)
-    access_log.addHandler(syslog_hndlr)
+#    access_log.addHandler(syslog_hndlr)
 
     return log
 
@@ -122,16 +127,65 @@ def send_shutdown(pid_file):
         log.info("Missing PID file: %s" % (pid_file))
 
 
-class RootHandler(tornado.web.RequestHandler):
+class JavascriptHandler(tornado.web.RequestHandler):
     def get(self):
         self.write("Hello world")
+
+    def get(self):
+        self.write("""
+<html>
+<body>
+<script>
+var ws = new WebSocket("ws://localhost:8888/ws");
+ws.onopen = function() {
+  ws.send("/hello.txt");
+};
+ws.onmessage = function (evt) {
+   document.body.innerHTML = evt.data;
+};
+</script>
+</body>
+</html>
+"""        )
+
+
+class WebsocketHandler(tornado.websocket.WebSocketHandler):
+    def open(self):
+        print("WebSocket opened")
+
+    def _cleanse_path(self, safe_dir, rest):
+        # Prevent nefarious pathname manipulations.
+        # TODO: Add tests for validity
+        rest = os.path.normpath(rest)
+        rest = rest.lstrip('/')
+        rest = rest.lstrip('../')
+        path = os.path.join(safe_dir, rest)
+        return path
+
+    def on_message(self, message):
+        found = False
+        for safe_dir in OPTIONS['safe_dirs']:
+            path = self._cleanse_path(safe_dir, message)
+            if os.path.exists(path) and os.path.isfile(path):
+                found = True
+                contents = open('/tmp/' + message, 'r').read()
+                self.write_message(contents)
+                break
+        # TODO: Handle file not found condition.
+        if not found:
+            print("File %s not found" % message)
+
+    def on_close(self):
+        print("WebSocket closed")
 
 
 def main():
 
     global log
     global my_daemon
+    global OPTIONS
     options = parse_cmd_line(sys.argv)
+    OPTIONS = options
     log = set_logging(options)   
 
     def _shutdown(signalnum=None, frame=None):
@@ -159,7 +213,8 @@ def main():
         log.debug("%s : %s" % (key, value))
     
     application = tornado.web.Application([
-            (r'/', RootHandler),
+            (r'/js', JavascriptHandler),
+            (r'/ws', WebsocketHandler),
             ])
 
 
