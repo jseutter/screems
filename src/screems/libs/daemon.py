@@ -2,8 +2,7 @@
 
 import sys, os, time, atexit, signal
 import logging
-LOG_NAME = "gns3ias"
-log = logging.getLogger("%s" % (LOG_NAME))
+log = logging.getLogger(__name__)
 
 class daemon:
     """A generic daemon class.

@@ -66,14 +66,12 @@ def parse_cmd_line(argv):
     argv: Pass in cmd line arguments
     """
 
-#    options = {}
-#    options["debug"] = False
-#    options["verbose"] = True
-#    options["port"] = 8888
-#    options["safe_dirs"] = ["/tmp"]
-#    options["safe_files"] = []
-#    options["shutdown"] = False
-#    options["daemon"] = False
+    if sys.platform == "linux":
+        syslog_location = "/dev/log"
+    elif sys.platform == "osx":
+        syslog_location = "/var/run/syslog"
+    else:
+        syslog_location = ('localhost',514)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Enable debugging", action="store_true")
@@ -83,13 +81,19 @@ def parse_cmd_line(argv):
     parser.add_argument("--files", help="Specific files to serve from the web interface")
     parser.add_argument("-k", "--kill", help="Kill previous instance running in the background", action="store_true")
     parser.add_argument("--background", help="Run in background", action="store_true")
+    parser.add_argument("--syslog", help="Send logs to syslog location", default=syslog_location)
 
     args = parser.parse_args()
     if args.dirs == None:
         args.dirs = []
     else:
         args.dirs = args.dirs.split(',')
-    # TODO add support for individual files
+    
+    if args.files == None:
+        args.files = []
+    else:
+        args.files = args.files.split(',')
+
     return args
 
 
@@ -115,21 +119,21 @@ def set_logging(cmd_options):
     console_log.setLevel(log_level_console)
     console_log.setFormatter(formatter)
 
-#    syslog_hndlr = SysLogHandler(
-#        address=cmd_options.syslog,
-#        facility=SysLogHandler.LOG_USER
-#    )
+    syslog_hndlr = SysLogHandler(
+        address=cmd_options.syslog,
+        facility=SysLogHandler.LOG_USER
+        )
 
-#    syslog_hndlr.setFormatter(sys_formatter)
+    syslog_hndlr.setFormatter(sys_formatter)
 
     log.setLevel(log_level)
     log.addHandler(console_log)
-#    log.addHandler(syslog_hndlr)
+    log.addHandler(syslog_hndlr)
 
     access_log = logging.getLogger("tornado.access")
     access_log.setLevel(log_level)
     access_log.addHandler(console_log)
-#    access_log.addHandler(syslog_hndlr)
+    access_log.addHandler(syslog_hndlr)
 
     return log
 
@@ -180,9 +184,33 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         rest = rest.lstrip('../')
         return os.path.join(safe_dir, rest)
 
+    def _cleanse_path(self, requested_file):
+        # Prevent nefarious pathname manipulations.
+        rest = os.path.normpath(requested_file)
+        rest = rest.lstrip('/')
+        rest = rest.lstrip('../')
+        return rest
+
+    def _check_path(self, requested_file):
+        if os.path.exists(requested_file) and os.path.isfile(requested_file)
+            return True
+        else
+            return False
+
+    def _on_data(self):
+        pass
+
     def on_message(self, message):
         # Find and serve the path requested in the message.
         found = False
+
+        for safe_file in OPTIONS.files:
+            absolute_path = self._cleanse_path(message)
+            if self._check_path(absolute_path):
+                found = True
+                break
+
+
         for safe_dir in OPTIONS.dirs:
             path = self._cleanse_path(safe_dir, message)
             if os.path.exists(path) and os.path.isfile(path):
@@ -204,8 +232,10 @@ def main():
     global log
     global my_daemon
     global OPTIONS
+    
     options = parse_cmd_line(sys.argv)
     OPTIONS = options
+
     log = set_logging(options)   
 
     def _shutdown(signalnum=None, frame=None):
