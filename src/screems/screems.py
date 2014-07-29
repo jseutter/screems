@@ -121,6 +121,12 @@ def send_shutdown(pid_file):
         log.info("No running instance found!!!")
         log.info("Missing PID file: %s" % (pid_file))
 
+
+class RootHandler(tornado.web.RequestHandler):
+    def get(self):
+        self.write("Hello world")
+
+
 def main():
 
     global log
@@ -152,7 +158,9 @@ def main():
     for key, value in iter(sorted(options.items())):
         log.debug("%s : %s" % (key, value))
     
-    application = tornado.web.Application(bla bla bla)
+    application = tornado.web.Application([
+            (r'/', RootHandler),
+            ])
 
 
     if options["daemon"]:
