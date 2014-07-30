@@ -79,6 +79,7 @@ def parse_cmd_line(argv):
     parser.add_argument("-p", "--port", help="Server port to run on", default=8888)
     parser.add_argument("--dirs", help="Directories to serve from the web interface")
     parser.add_argument("--files", help="Specific files to serve from the web interface")
+    parser.add_argument("--wait", help="Specify how long to watch a file for new data", default=300)
     parser.add_argument("-k", "--kill", help="Kill previous instance running in the background", action="store_true")
     parser.add_argument("--background", help="Run in background", action="store_true")
     parser.add_argument("--syslog", help="Send logs to syslog location", default=syslog_location)
@@ -176,12 +177,7 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
     def open(self):
         print("WebSocket opened")
 
-    def _cleanse_path(self, safe_dir, rest):
-        # Prevent nefarious pathname manipulations.
-        # TODO: Add tests for validity
-        rest = os.path.normpath(rest)
-        rest = rest.lstrip('/')
-        rest = rest.lstrip('../')
+    def _combine_path(self, safe_dir, requested_file):
         return os.path.join(safe_dir, rest)
 
     def _cleanse_path(self, requested_file):
@@ -197,12 +193,14 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         else
             return False
 
+
     def _on_data(self):
-        pass
+        
 
     def on_message(self, message):
         # Find and serve the path requested in the message.
         found = False
+        absolute_path = None
 
         for safe_file in OPTIONS.files:
             absolute_path = self._cleanse_path(message)
@@ -210,21 +208,22 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
                 found = True
                 break
 
-
         for safe_dir in OPTIONS.dirs:
-            path = self._cleanse_path(safe_dir, message)
+            path = self._cleanse_path(message)
+            absolute_path = self._combine_path(safe_dir, path)
             if os.path.exists(path) and os.path.isfile(path):
                 found = True
-                contents = open(path, 'r').read()
-                self.write_message(contents)
-                print("WSSEND %s (%s)" % (message, path))
                 break
-        # TODO: Handle file not found condition.
+                
         if not found:
-            print("File %s not found" % message)
+            log.warning("Requested file not found: %s" % (absolute_path))
+            self.write_message("File not found: %s" % (message))
+
+        self.filename = absolute_path
+        self._on_data()
 
     def on_close(self):
-        print("WebSocket closed")
+        log.info("Connection closed")
 
 
 def main():
