@@ -188,14 +188,14 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         return rest
 
     def _check_path(self, requested_file):
-        if os.path.exists(requested_file) and os.path.isfile(requested_file)
+        if os.path.exists(requested_file) and os.path.isfile(requested_file):
             return True
-        else
+        else:
             return False
 
 
     def _on_data(self):
-        
+        pass
 
     def on_message(self, message):
         # Find and serve the path requested in the message.
