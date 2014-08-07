@@ -13,6 +13,7 @@ from logging.handlers import *
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
+from tornado import gen
 
 
 SCRIPT_NAME = os.path.basename(__file__)
@@ -178,7 +179,7 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         print("WebSocket opened")
 
     def _combine_path(self, safe_dir, requested_file):
-        return os.path.join(safe_dir, rest)
+        return os.path.join(safe_dir, requested_file)
 
     def _cleanse_path(self, requested_file):
         # Prevent nefarious pathname manipulations.
@@ -194,8 +195,16 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
             return False
 
 
-    def _on_data(self):
-        pass
+    def _on_data(self, callback=None):
+        data = self.stream_file_obj.read(1024)
+        if data:
+            self.write_message(data)
+            tornado.ioloop.IOLoop.instance().add_callback(self._on_data)
+            log.debug("Have data, adding callback")
+        else:
+            tornado.ioloop.IOLoop.instance().call_later(2, self._on_data)
+            log.debug("No data, will try again later")
+
 
     def on_message(self, message):
         # Find and serve the path requested in the message.
@@ -207,23 +216,26 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
             if self._check_path(absolute_path):
                 found = True
                 break
+        else:
+            for safe_dir in OPTIONS.dirs:
+                path = self._cleanse_path(message)
+                absolute_path = self._combine_path(safe_dir, path)
+                if self._check_path(absolute_path):
+                    found = True
+                    break
 
-        for safe_dir in OPTIONS.dirs:
-            path = self._cleanse_path(message)
-            absolute_path = self._combine_path(safe_dir, path)
-            if os.path.exists(path) and os.path.isfile(path):
-                found = True
-                break
-                
-        if not found:
+        if found:
+            self.filename = absolute_path
+            self.stream_file_obj = open(self.filename)
+            self._on_data()
+        else:
             log.warning("Requested file not found: %s" % (absolute_path))
             self.write_message("File not found: %s" % (message))
 
-        self.filename = absolute_path
-        self._on_data()
-
     def on_close(self):
         log.info("Connection closed")
+        if hasattr(self, 'stream_file_obj'):
+            self.stream_file_obj.close()
 
 
 def main():
