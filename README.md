@@ -5,10 +5,10 @@ Screems is a web socket based file streamer.
 ## Why?
 
 Getting a file is easy, you can:
-1. Download the file over http
-1. rsync
-1. scp
-1. etc
+1 Download the file over http
+1 rsync
+1 scp
+1 etc
 
 ## How does it work?
 
