@@ -152,9 +152,6 @@ def send_shutdown(pid_file):
 
 class JavascriptHandler(tornado.web.RequestHandler):
     def get(self):
-        self.write("Hello world")
-
-    def get(self):
         # TODO: add support for changing port
         # TODO: add support for setting fqdn
         self.write("""
@@ -176,7 +173,7 @@ ws.onmessage = function (evt) {
 
 class WebsocketHandler(tornado.websocket.WebSocketHandler):
     def open(self):
-        print("WebSocket opened")
+        log.debug("WebSocket opened")
 
     def _combine_path(self, safe_dir, requested_file):
         return os.path.join(safe_dir, requested_file)
@@ -198,11 +195,11 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
     def _on_data(self, callback=None):
         data = self.stream_file_obj.read(1024)
         if data:
-            self.write_message(data)
+            self.write_message(data, binary=self.transferbinary)
             tornado.ioloop.IOLoop.instance().add_callback(self._on_data)
             log.debug("Have data, adding callback")
         else:
-            tornado.ioloop.IOLoop.instance().call_later(2, self._on_data)
+            tornado.ioloop.IOLoop.instance().call_later(1, self._on_data)
             log.debug("No data, will try again later")
 
 
@@ -210,15 +207,28 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         # Find and serve the path requested in the message.
         found = False
         absolute_path = None
+        file_wanted = None
+        self.transferbinary = False
+
+        try:
+            data = json.loads(message)
+            file_wanted = data['filename']
+
+            if 'transfertype' in data and data['transfertype'] == 'binary':
+                self.transferbinary = True
+        except:
+            self.write_message("Error parsing json, expecting: {\"filename\": \"textfile.txt\"} ")
+            self.close()
+            return
 
         for safe_file in OPTIONS.files:
-            absolute_path = self._cleanse_path(message)
+            absolute_path = self._cleanse_path(file_wanted)
             if self._check_path(absolute_path):
                 found = True
                 break
         else:
             for safe_dir in OPTIONS.dirs:
-                path = self._cleanse_path(message)
+                path = self._cleanse_path(file_wanted)
                 absolute_path = self._combine_path(safe_dir, path)
                 if self._check_path(absolute_path):
                     found = True
@@ -229,8 +239,8 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
             self.stream_file_obj = open(self.filename)
             self._on_data()
         else:
-            log.warning("Requested file not found: %s" % (absolute_path))
-            self.write_message("File not found: %s" % (message))
+            log.warning("Requested file not found: %s" % (file_wanted))
+            self.write_message("File not found: %s" % (file_wanted))
 
     def on_close(self):
         log.info("Connection closed")
@@ -273,7 +283,7 @@ def main():
     log.debug(str(options))
     
     application = tornado.web.Application([
-            (r'/js', JavascriptHandler),
+            (r'/jsviewer', JavascriptHandler),
             (r'/ws', WebsocketHandler),
             ])
 
