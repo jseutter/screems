@@ -8,6 +8,7 @@ import json
 import signal
 from os.path import expanduser
 from logging.handlers import *
+from stat import *
 
 
 import tornado.ioloop
@@ -179,17 +180,25 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
 
     def _on_data(self, callback=None):
         try:
-            data = self.stream_file_obj.read(1024)
+            data = self.file_obj.read(1024)
         except ValueError:
             return
 
         if data:
+            self.file_missed_counts = 0
             self.write_message(data, binary=self.transferbinary)
             tornado.ioloop.IOLoop.instance().add_callback(self._on_data)
-            log.debug("Have data, adding callback")
         else:
+            self.file_missed_counts +=1
             tornado.ioloop.IOLoop.instance().call_later(1, self._on_data)
-            log.debug("No data, will try again later")
+
+        if self.file_missed_counts > 5:
+            current_inode = os.stat(self.filename)[ST_INO]
+            if current_inode != self.file_inode:
+                self.file_obj.close()
+                self.file_obj = open(self.filename)
+                self.file_inode = os.stat(self.filename)[ST_INO]
+                self.write_message("-------- File inode change - re-opening file --------")
 
 
     def on_message(self, message):
@@ -198,6 +207,8 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         absolute_path = None
         file_wanted = None
         self.transferbinary = False
+        self.file_inode = 0
+        self.file_missed_counts = 0
 
         log.debug("Message received: %s" % (message))
 
@@ -228,7 +239,8 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
 
         if found:
             self.filename = absolute_path
-            self.stream_file_obj = open(self.filename)
+            self.file_obj = open(self.filename)
+            self.file_inode = os.stat(self.filename)[ST_INO]
             self._on_data()
         else:
             log.warning("Requested file not found: %s" % (file_wanted))
