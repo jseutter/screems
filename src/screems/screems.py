@@ -27,7 +27,7 @@ if not SCRIPT_PATH:
 
 
 EXTRA_LIB = "%s/libs" % (SCRIPT_PATH)
-
+TEMPLATES = "%s/templates" % (SCRIPT_PATH)
 
 LOG_NAME = "%s" % (SCRIPT_NAME)
 OPTIONS = {}
@@ -152,23 +152,8 @@ def send_shutdown(pid_file):
 
 class JavascriptHandler(tornado.web.RequestHandler):
     def get(self):
-        # TODO: add support for changing port
-        # TODO: add support for setting fqdn
-        self.write("""
-<html>
-<body>
-<script>
-var ws = new WebSocket("ws://localhost:8888/ws");
-ws.onopen = function() {
-  ws.send("/hello.txt");
-};
-ws.onmessage = function (evt) {
-   document.body.innerHTML = evt.data;
-};
-</script>
-</body>
-</html>
-"""        )
+        with open("%s/jsviewer.html" % (TEMPLATES)) as jsviewer:
+            self.write(''.join(jsviewer.readlines()))
 
 
 class WebsocketHandler(tornado.websocket.WebSocketHandler):
@@ -193,7 +178,11 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
 
 
     def _on_data(self, callback=None):
-        data = self.stream_file_obj.read(1024)
+        try:
+            data = self.stream_file_obj.read(1024)
+        except ValueError:
+            return
+
         if data:
             self.write_message(data, binary=self.transferbinary)
             tornado.ioloop.IOLoop.instance().add_callback(self._on_data)
@@ -210,8 +199,11 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
         file_wanted = None
         self.transferbinary = False
 
+        log.debug("Message received: %s" % (message))
+
         try:
             data = json.loads(message)
+            log.debug("Parsed json: %s" % (data))
             file_wanted = data['filename']
 
             if 'transfertype' in data and data['transfertype'] == 'binary':

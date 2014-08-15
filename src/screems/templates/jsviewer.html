@@ -1,0 +1,76 @@
+<html>
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+    <style>
+        textarea.form-control { height: 90%; }
+    </style>
+
+    <body>
+    <script>
+    $(function() {
+        $("button#submit_id").click(function(){
+            var textarea = document.getElementById('file_content_id');
+            var my_filename = $( "input:first" ).val();
+            textarea.value = '';
+
+            if (!my_filename.trim()) {
+                alert("Please provide a file name");
+                return;
+            }
+
+            if (typeof ws !== 'undefined') {
+                ws.close()
+            }
+
+            window.ws = new WebSocket("ws://127.0.0.1:8888/ws");
+
+            ws.onopen = function() {
+                console.log(my_filename);
+                data = JSON.stringify({filename: my_filename});
+                ws.send(data);
+            };
+
+            ws.onmessage = function (evt) {
+                textarea.value += evt.data;
+                textarea.scrollTop = textarea.scrollHeight;
+            };
+
+        });
+
+        $("button#close_id").click(function(){
+            if (typeof ws !== 'undefined') {
+                ws.close()
+            }
+        });
+
+    });
+    </script>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-4"><h1>Screems</h1></div>
+            <div class="col-md-2"></div>
+            <div class="col-md-6">
+
+                <form class="form-inline" role="form">
+                    <div class="form-group pull-right">
+                        <label for="filename">Filename:</label>
+                        <input type="filename" class="form-control input-lg" id="filename" placeholder="Filename">
+                   
+                        <button type="button" class="btn btn-primary btn-lg" id="submit_id">Submit</button>
+                        <button type="button" class="btn btn-primary btn-lg" id="close_id">Close</button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-lg-12 col-md-12">
+                <textarea id="file_content_id" name="file_content" class="form-control"></textarea>
+            </div>
+        </div>
+    </div>
+    </body>
+</html>
