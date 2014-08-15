@@ -25,3 +25,21 @@ Screems uses Tornado for web socket and http communication:
  
  Client <---- File streamed <---- Server
 
+## Usage
+
+On the server:
+
+python screems.py --dir /home/usertest --file /var/log/httpd/access.log
+
+Then on a client machine:
+
+wsdump.py ws:/<server-name>:8888/ws
+
+and send a JSON message requesting a certain file, like:
+
+- { "filename":"testfile.txt" }
+- { "filename":"/var/log/httpd/access.log" }
+
+The system will look for testfile.txt in all the directories specified by --dir on the server.
+
+
