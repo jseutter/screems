@@ -45,3 +45,5 @@ The system will look for testfile.txt in all the directories specified by --dir 
 ## Demo Client
 
 There is a Javascript websocket streaming app available at <hostname>:<port>/jsviewer that you can point a browser to and watch it update.
+
+![Alt text](src/screems/screenshots/screems-jsviewer.png?raw=true "jsviewer")
