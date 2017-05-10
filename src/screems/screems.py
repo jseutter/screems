@@ -225,6 +225,7 @@ class WebsocketHandler(tornado.websocket.WebSocketHandler):
                 self.transferbinary = True
         except:
             self.write_message("Error parsing json, expecting: {\"filename\": \"textfile.txt\"} ")
+            self.write_message("You sent: %s" % (message))
             self.close()
             return
 

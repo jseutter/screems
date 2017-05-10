@@ -1,18 +1,83 @@
 
 <html>
-<head>
-<script type="text/javascript" src="/static/brython.js"></script>
-<script type="text/javascript" src="/static/brython_stdlib.js"></script>
-</head>
-<body onload="brython()">
-<script type="text/python">
-from browser import document, alert
+    <head>
+    <script type="text/javascript" src="/static/brython.js"></script>
+    <script type="text/javascript" src="/static/brython_stdlib.js"></script>
+    <link href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
 
-def echo(ev):
-    alert(document["zone"].value)
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    </head>
 
-document['mybutton'].bind('click',echo)
-</script>
-<input id="zone"><button id="mybutton">click !</button>
-</body>
+    <style>
+        textarea.form-control { height: 90%; }
+    </style>
+
+    <body onload="brython()">
+    <script type="text/python">
+    from browser import alert, document as doc
+    from browser import websocket
+
+    def on_open(evt):
+        doc['closebtn'].disabled = False
+        doc['openbtn'].disabled = True
+        data = doc["filename"].value
+        if data:
+            ws.send('{"filename" : "%s"}' % (data))
+
+    def on_message(evt):
+        # message reeived from server
+        #alert("Message received : %s" %evt.data)
+        doc['file_content_id'].value += "%s" % (evt.data)
+        doc['file_content_id'].scrollHeight
+
+    def on_close(evt):
+        # websocket is closed
+        doc['openbtn'].disabled = False
+        doc['closebtn'].disabled = True
+
+    ws = None
+    def _open(ev):
+        if not websocket.supported:
+            alert("WebSocket is not supported by your browser")
+            return
+        global ws
+        # open a web socket
+        ws = websocket.WebSocket("ws://127.0.0.1:8888/ws")
+        # bind functions to web socket events
+        ws.bind('open',on_open)
+        ws.bind('message',on_message)
+
+    def close_connection(ev):
+        ws.close()
+        doc['openbtn'].disabled = False
+
+    doc['openbtn'].bind('click', _open)
+    doc['closebtn'].bind('click', close_connection)
+
+    </script>
+
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-4"><h1>Screems</h1></div>
+            <div class="col-md-2"></div>
+            <div class="col-md-6">
+
+                <form class="form-inline" role="form">
+                    <div class="form-group pull-right">
+                        <label for="filename">Filename:</label>
+                        <input type="filename" class="form-control input-lg" id="filename" placeholder="Filename">
+
+                        <button type="button" class="btn btn-primary btn-lg" id="openbtn">Submit</button>
+                        <button type="button" class="btn btn-primary btn-lg" id="closebtn">Close</button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-lg-12 col-md-12">
+                <textarea id="file_content_id" name="file_content" class="form-control"></textarea>
+            </div>
+        </div>
+    </div>
+    </body>
+    </body>
 </html>
