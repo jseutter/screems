@@ -1,0 +1,18 @@
+
+<html>
+<head>
+<script type="text/javascript" src="/static/brython.js"></script>
+<script type="text/javascript" src="/static/brython_stdlib.js"></script>
+</head>
+<body onload="brython()">
+<script type="text/python">
+from browser import document, alert
+
+def echo(ev):
+    alert(document["zone"].value)
+
+document['mybutton'].bind('click',echo)
+</script>
+<input id="zone"><button id="mybutton">click !</button>
+</body>
+</html>

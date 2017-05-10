@@ -39,7 +39,7 @@ sys.path.append(EXTRA_LIB)
 
 import daemon
 
-my_daemon = None 
+my_daemon = None
 
 usage = """
 USAGE: %s
@@ -49,12 +49,12 @@ Options:
   -d, --debug         Enable debugging
   -v, --verbose       Enable verbose logging
   -h, --help          Display this menu :)
-  
+
   -p, --port          Server port to run on
 
   --dir=<dirs>        Directory that are accessible from the web interface
   --file=file         Specific files available from the web interface
-  
+
   -k                  Kill previous instance running in background
   --background        Run in background
 
@@ -91,7 +91,7 @@ def parse_cmd_line(argv):
         args.dirs = []
     else:
         args.dirs = args.dirs.split(',')
-    
+
     if args.files == None:
         args.files = []
     else:
@@ -156,6 +156,10 @@ class JavascriptHandler(tornado.web.RequestHandler):
         with open("%s/jsviewer.html" % (TEMPLATES)) as jsviewer:
             self.write(''.join(jsviewer.readlines()))
 
+class BrythonscriptHandler(tornado.web.RequestHandler):
+    def get(self):
+        with open("%s/brythonviewer.html" % (TEMPLATES)) as brythonviewer:
+            self.write(''.join(brythonviewer.readlines()))
 
 class WebsocketHandler(tornado.websocket.WebSocketHandler):
     def open(self):
@@ -257,11 +261,11 @@ def main():
     global log
     global my_daemon
     global OPTIONS
-    
+
     options = parse_cmd_line(sys.argv)
     OPTIONS = options
 
-    log = set_logging(options)   
+    log = set_logging(options)
 
     def _shutdown(signalnum=None, frame=None):
         """
@@ -285,10 +289,14 @@ def main():
 
     log.debug("Using settings:")
     log.debug(str(options))
-    
+
+    static_path = "static"
+
     application = tornado.web.Application([
+            (r'/brythonviewer', BrythonscriptHandler),
             (r'/jsviewer', JavascriptHandler),
             (r'/ws', WebsocketHandler),
+            (r'/static/(.*)', tornado.web.StaticFileHandler, {'path': static_path}),
             ])
 
 
